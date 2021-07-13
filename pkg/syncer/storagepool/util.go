@@ -38,6 +38,7 @@ import (
 	"k8s.io/apimachinery/pkg/util/runtime"
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/client-go/dynamic"
+	"k8s.io/client-go/rest"
 	"sigs.k8s.io/controller-runtime/pkg/client/config"
 
 	spv1alpha1 "sigs.k8s.io/vsphere-csi-driver/pkg/apis/storagepool/cns/v1alpha1"
@@ -186,6 +187,19 @@ func getSPClient(ctx context.Context) (dynamic.Interface, *schema.GroupVersionRe
 		log.Errorf("Failed to get Kubernetes config. Err: %+v", err)
 		return nil, nil, err
 	}
+	spclient, err := dynamic.NewForConfig(cfg)
+	if err != nil {
+		log.Errorf("Failed to create StoragePool client using config. Err: %+v", err)
+		return nil, nil, err
+	}
+	spResource := spv1alpha1.SchemeGroupVersion.WithResource("storagepools")
+	return spclient, &spResource, nil
+}
+
+// getSPClient returns the StoragePool dynamic client
+func getSPClientWithConfig(ctx context.Context, cfg *rest.Config) (dynamic.Interface, *schema.GroupVersionResource, error) {
+	log := logger.GetLogger(ctx)
+	// Create a client to create/udpate StoragePool instances
 	spclient, err := dynamic.NewForConfig(cfg)
 	if err != nil {
 		log.Errorf("Failed to create StoragePool client using config. Err: %+v", err)

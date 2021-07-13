@@ -145,8 +145,10 @@ func newIntendedState(ctx context.Context, ds *cnsvsphere.DatastoreInfo,
 	dsPolicies, ok := dsPolicyCompatMap[ds.Reference().Value]
 	if ok {
 		for _, policyID := range dsPolicies {
-			scName := scWatchCntlr.policyToScMap[policyID].Name
-			compatSC = append(compatSC, scName)
+			for _, sc := range scWatchCntlr.policyToScMap[policyID] {
+				scName := sc.Name
+				compatSC = append(compatSC, scName)
+			}
 		}
 	} else {
 		log.Infof("Failed to get compatible policies for %s", ds.Reference().Value)
@@ -342,6 +344,49 @@ func (c *SpController) applyIntendedState(ctx context.Context, state *intendedSt
 		}
 	}
 	c.intendedStateMap.Store(state.dsMoid, state)
+	return nil
+}
+
+// applyIntendedState applies the given in-memory IntendedState on to the actual state of a StoragePool in the WCP cluster.
+func (c *GuestStoragePoolController) applyIntendedState(ctx context.Context, state *intendedState) error {
+	log := logger.GetLogger(ctx)
+	// Get StoragePool with spName and Update if already present, otherwise Create resource
+	sp, err := c.k8sDynamicGuestClient.Resource(*c.spResource).Get(ctx, state.spName, metav1.GetOptions{})
+	if err != nil {
+		log.Error(err)
+		statusErr, ok := err.(*k8serrors.StatusError)
+		log.Error(statusErr)
+		if ok && statusErr.Status().Reason == metav1.StatusReasonNotFound {
+			log.Infof("Creating StoragePool instance for %s", state.spName)
+			sp := state.createUnstructuredStoragePool(ctx)
+			newSp, err := c.k8sDynamicGuestClient.Resource(*c.spResource).Create(ctx, sp, metav1.CreateOptions{})
+			if err != nil {
+				log.Errorf("Error creating StoragePool %s. Err: %+v", state.spName, err)
+				return err
+			}
+			log.Debugf("Successfully created StoragePool %v", newSp)
+		}
+	} else {
+		// StoragePool already exists, so Update it
+		// We don't expect ConflictErrors since updates are synchronized with a lock
+		log.Infof("Updating StoragePool instance for %s", state.spName)
+		sp := state.updateUnstructuredStoragePool(ctx, sp)
+		newSp, err := c.k8sDynamicGuestClient.Resource(*c.spResource).Update(ctx, sp, metav1.UpdateOptions{})
+		if err != nil {
+			log.Errorf("Error updating StoragePool %s. Err: %+v", state.spName, err)
+			return err
+		}
+		log.Debugf("Successfully updated StoragePool %v", newSp)
+	}
+
+	// update the underlying dsType in the all the compatible storage classes for reverse mapping
+	for _, scName := range state.compatSC {
+		if err := updateSPTypeInSC(ctx, scName, state.dsType); err != nil {
+			log.Errorf("Failed to update compatibleSPTypes in storage class %s. Err: %+v", scName, err)
+			continue
+		}
+	}
+	//c.intendedStateMap.Store(state.dsMoid, state)
 	return nil
 }
 

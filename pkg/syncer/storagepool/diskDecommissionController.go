@@ -345,17 +345,15 @@ func (w *DiskDecommController) watchStoragePool(ctx context.Context) {
 				}
 				continue
 			}
+
 			sp, ok := e.Object.(*unstructured.Unstructured)
 			if !ok {
 				log.Warnf("Object in StoragePool watch event is not of type *unstructured.Unstructured, but of type %T", e.Object)
 				continue
 			}
 			spName := sp.GetName()
-			if ok := w.shouldEnterDiskDecommission(ctx, sp); ok {
-				maintenanceMode := w.diskDecommMode[spName]
-				log.Infof("Got enter disk decommission request for StoragePool %v with MM %v", spName, maintenanceMode)
-				go w.DecommissionDisk(ctx, spName, maintenanceMode)
-			}
+			log.Info(spName)
+			log.Info(e.Type)
 		}
 	}
 	log.Info("watchStoragePool ends")

@@ -100,7 +100,7 @@ func main() {
 		// Initialize K8sCloudOperator for every instance of vsphere-syncer in the Supervisor
 		// Cluster, independent of whether leader election is enabled.
 		// K8sCloudOperator should run on every node where csi controller can run.
-		if clusterFlavor == cnstypes.CnsClusterFlavorWorkload {
+		if clusterFlavor == cnstypes.CnsClusterFlavorWorkload || clusterFlavor == cnstypes.CnsClusterFlavorGuest {
 			go func() {
 				if err := k8scloudoperator.InitK8sCloudOperatorService(ctx); err != nil {
 					log.Fatalf("Error initializing K8s Cloud Operator gRPC sever. Error: %+v", err)
@@ -159,9 +159,9 @@ func initSyncerComponents(ctx context.Context, clusterFlavor cnstypes.CnsCluster
 			os.Exit(1)
 		}
 		// Initialize CNS Operator for Supervisor clusters
-		if clusterFlavor == cnstypes.CnsClusterFlavorWorkload {
+		if clusterFlavor == cnstypes.CnsClusterFlavorWorkload || clusterFlavor == cnstypes.CnsClusterFlavorGuest {
 			go func() {
-				if err := storagepool.InitStoragePoolService(ctx, configInfo, coInitParams); err != nil {
+				if err := storagepool.InitStoragePoolService(ctx, clusterFlavor, configInfo, coInitParams); err != nil {
 					log.Errorf("Error initializing StoragePool Service. Error: %+v", err)
 					os.Exit(1)
 				}

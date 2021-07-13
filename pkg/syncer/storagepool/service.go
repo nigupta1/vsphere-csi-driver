@@ -18,12 +18,14 @@ package storagepool
 
 import (
 	"context"
+	"fmt"
 	"reflect"
 	"sync"
 	"time"
 
 	cnstypes "github.com/vmware/govmomi/cns/types"
 	apiextensionsv1beta1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1beta1"
+	"k8s.io/client-go/rest"
 	"sigs.k8s.io/controller-runtime/pkg/client/config"
 
 	spv1alpha1 "sigs.k8s.io/vsphere-csi-driver/pkg/apis/storagepool/cns/v1alpha1"
@@ -50,9 +52,9 @@ var (
 
 // InitStoragePoolService initializes the StoragePool service that updates
 // vSphere Datastore information into corresponding k8s StoragePool resources.
-func InitStoragePoolService(ctx context.Context, configInfo *commonconfig.ConfigurationInfo, coInitParams *interface{}) error {
+func InitStoragePoolService(ctx context.Context, clusterFlavor cnstypes.CnsClusterFlavor, configInfo *commonconfig.ConfigurationInfo, coInitParams *interface{}) error {
 	log := logger.GetLogger(ctx)
-	log.Infof("Initializing Storage Pool Service")
+	log.Infof("Initializing Storage Pool Service in %s cluster", clusterFlavor)
 
 	// Get a config to talk to the apiserver
 	cfg, err := config.GetConfig()
@@ -73,6 +75,27 @@ func InitStoragePoolService(ctx context.Context, configInfo *commonconfig.Config
 		return err
 	}
 
+	if clusterFlavor == cnstypes.CnsClusterFlavorWorkload {
+		err = initStoragePoolServiceOnSV(ctx, configInfo, cfg, coInitParams)
+		if err != nil {
+			return err
+		}
+	} else if clusterFlavor == cnstypes.CnsClusterFlavorGuest {
+		err = initStoragePoolServiceOnGC(ctx, configInfo)
+		if err != nil {
+			return err
+		}
+	} else {
+		err = fmt.Errorf("StoragePool service cannot start on clusterFlavor: %s", clusterFlavor)
+		return err
+	}
+
+	log.Infof("Done initializing Storage Pool Service")
+	return nil
+}
+
+func initStoragePoolServiceOnSV(ctx context.Context, configInfo *commonconfig.ConfigurationInfo, cfg *rest.Config, coInitParams *interface{}) error {
+	log := logger.GetLogger(ctx)
 	// Get VC connection
 	vc, err := cnsvsphere.GetVirtualCenterInstance(ctx, configInfo, false)
 	if err != nil {
@@ -147,8 +170,6 @@ func InitStoragePoolService(ctx context.Context, configInfo *commonconfig.Config
 	defaultStoragePoolService.clusterID = configInfo.Cfg.Global.ClusterID
 
 	startPropertyCollectorListener(ctx)
-
-	log.Infof("Done initializing Storage Pool Service")
 	return nil
 }
 

@@ -83,17 +83,21 @@ func InitK8sCloudOperatorService(ctx context.Context) error {
 	log.Debugf("K8s Cloud Operator Service will be running on port %d", k8sCloudOperatorServicePort)
 	port := flag.Int("port", k8sCloudOperatorServicePort, "The k8s cloud operator service port")
 	lis, err := net.Listen("tcp", fmt.Sprintf(":%d", *port))
+	log.Infof("started listening %d", *port)
 	if err != nil {
 		log.Errorf("failed to listen. Err: %v", err)
 		return err
 	}
 	grpcServer := grpc.NewServer()
+	log.Info("created new grpc")
 	server, err := initK8sCloudOperatorType(ctx)
 	if err != nil {
 		return err
 	}
 	RegisterK8SCloudOperatorServer(grpcServer, server)
+	log.Info("registered grpc")
 	err = grpcServer.Serve(lis)
+	log.Info("started serving")
 	if err != nil {
 		log.Errorf("Failed to accept incoming connections on k8s Cloud Operator gRPC server. Err: %+v", err)
 		return err

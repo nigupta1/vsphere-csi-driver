@@ -36,6 +36,7 @@ import (
 	"sigs.k8s.io/vsphere-csi-driver/pkg/csi/service/common"
 	"sigs.k8s.io/vsphere-csi-driver/pkg/csi/service/common/commonco"
 	"sigs.k8s.io/vsphere-csi-driver/pkg/csi/service/logger"
+	"sigs.k8s.io/vsphere-csi-driver/pkg/syncer/k8scloudoperator"
 )
 
 const (
@@ -63,7 +64,8 @@ func validateGuestClusterCreateVolumeRequest(ctx context.Context, req *csi.Creat
 	params := req.GetParameters()
 	for param := range params {
 		paramName := strings.ToLower(param)
-		if paramName != common.AttributeSupervisorStorageClass {
+		if (paramName != common.AttributeSupervisorStorageClass) &&
+			(paramName != common.AttributeStoragePool) {
 			msg := fmt.Sprintf("Volume parameter %s is not a valid GC CSI parameter", param)
 			return status.Error(codes.InvalidArgument, msg)
 		}
@@ -171,6 +173,33 @@ func getPersistentVolumeClaimSpecWithStorageClass(pvcName string, namespace stri
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      pvcName,
 			Namespace: namespace,
+		},
+		Spec: v1.PersistentVolumeClaimSpec{
+			AccessModes: []v1.PersistentVolumeAccessMode{
+				pvcAccessMode,
+			},
+			Resources: v1.ResourceRequirements{
+				Requests: v1.ResourceList{
+					v1.ResourceName(v1.ResourceStorage): resource.MustParse(diskSize),
+				},
+			},
+			StorageClassName: &storageClassName,
+		},
+	}
+	return claim
+}
+
+// getPersistentVolumeClaimSpecWithStorageClass return the PersistentVolumeClaim spec with specified storage class
+func getPersistentVolumeClaimSpecWithSCAndSP(pvcName string, namespace string, diskSize string, storagePool string, storageClassName string, pvcAccessMode v1.PersistentVolumeAccessMode) *v1.PersistentVolumeClaim {
+
+	labels := make(map[string]string)
+	labels[k8scloudoperator.StoragePoolAnnotationKey] = storagePool
+	storageClassName = storageClassName + "-immediate"
+	claim := &v1.PersistentVolumeClaim{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      pvcName,
+			Namespace: namespace,
+			Labels:    labels,
 		},
 		Spec: v1.PersistentVolumeClaimSpec{
 			AccessModes: []v1.PersistentVolumeAccessMode{

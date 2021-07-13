@@ -48,6 +48,7 @@ import (
 
 	cnsoperatorv1alpha1 "sigs.k8s.io/vsphere-csi-driver/pkg/apis/cnsoperator"
 	migrationv1alpha1 "sigs.k8s.io/vsphere-csi-driver/pkg/apis/migration/v1alpha1"
+	storagepoolv1alpha1 "sigs.k8s.io/vsphere-csi-driver/pkg/apis/storagepool/cns/v1alpha1"
 	cnsvsphere "sigs.k8s.io/vsphere-csi-driver/pkg/common/cns-lib/vsphere"
 	cnsconfig "sigs.k8s.io/vsphere-csi-driver/pkg/common/config"
 	"sigs.k8s.io/vsphere-csi-driver/pkg/csi/service/logger"
@@ -175,6 +176,11 @@ func NewClientForGroup(ctx context.Context, config *restclient.Config, groupName
 			return nil, err
 		}
 		err = cnsvolumeoperationrequestv1alpha1.AddToScheme(scheme)
+		if err != nil {
+			log.Errorf("failed to add to scheme with err: %+v", err)
+			return nil, err
+		}
+		err = storagepoolv1alpha1.AddToScheme(scheme)
 		if err != nil {
 			log.Errorf("failed to add to scheme with err: %+v", err)
 			return nil, err

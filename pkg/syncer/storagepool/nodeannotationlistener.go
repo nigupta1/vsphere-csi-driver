@@ -52,6 +52,26 @@ func InitNodeAnnotationListener(ctx context.Context, informerManager *k8s.Inform
 	return nil
 }
 
+/*
+// InitNodeAnnotationListener initializes a listener that listens to Nodes in a WCP cluster.
+func InitNodeAnnotationListenerForGC(ctx context.Context, informerManager *k8s.InformerManager,
+	scWatch *StorageClassWatch, spController *SpController) error {
+	log := logger.GetLogger(ctx)
+	defaultNodeAnnotationListener = NodeAnnotationListener{
+		informerManager: informerManager,
+		scWatch:         scWatch,
+		spController:    spController,
+	}
+	defaultNodeAnnotationListener.informerManager.AddNodeListener(
+		defaultNodeAnnotationListener.nodeUpdatedForGC,
+		defaultNodeAnnotationListener.nodeUpdatedForGC, // Update
+		defaultNodeAnnotationListener.nodeUpdatedForGC)
+	log.Infof("NodeAnnotationListener initialized.")
+	<-defaultNodeAnnotationListener.informerManager.Listen()
+	return nil
+}
+*/
+
 func (l *NodeAnnotationListener) nodeUpdated(oldObj interface{}, newObj interface{}) {
 	ctx, log := logger.GetNewContextWithLogger()
 	oldNode, ok := oldObj.(*v1.Node)

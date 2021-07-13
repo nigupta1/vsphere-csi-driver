@@ -34,6 +34,7 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 	corev1 "k8s.io/api/core/v1"
+	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -259,18 +260,31 @@ func (c *controller) CreateVolume(ctx context.Context, req *csi.CreateVolumeRequ
 
 		// Get supervisorStorageClass and accessMode
 		var supervisorStorageClass string
+		var storagePool string
 		for param := range req.Parameters {
 			paramName := strings.ToLower(param)
 			if paramName == common.AttributeSupervisorStorageClass {
 				supervisorStorageClass = req.Parameters[param]
 			}
+			if paramName == common.AttributeStoragePool {
+				storagePool = req.Parameters[param]
+			}
+
 		}
+
 		accessMode := req.GetVolumeCapabilities()[0].GetAccessMode().GetMode()
 		pvc, err := c.supervisorClient.CoreV1().PersistentVolumeClaims(c.supervisorNamespace).Get(ctx, supervisorPVCName, metav1.GetOptions{})
 		if err != nil {
 			if errors.IsNotFound(err) {
 				diskSize := strconv.FormatInt(volSizeMB, 10) + "Mi"
-				claim := getPersistentVolumeClaimSpecWithStorageClass(supervisorPVCName, c.supervisorNamespace, diskSize, supervisorStorageClass, getAccessMode(accessMode))
+				var claim *v1.PersistentVolumeClaim
+				if storagePool != "" {
+					//create DataSource
+					claim = getPersistentVolumeClaimSpecWithSCAndSP(supervisorPVCName, c.supervisorNamespace, diskSize, storagePool, supervisorStorageClass, getAccessMode(accessMode))
+				} else {
+					claim = getPersistentVolumeClaimSpecWithStorageClass(supervisorPVCName, c.supervisorNamespace, diskSize, supervisorStorageClass, getAccessMode(accessMode))
+				}
+
 				log.Debugf("PVC claim spec is %+v", spew.Sdump(claim))
 				pvc, err = c.supervisorClient.CoreV1().PersistentVolumeClaims(c.supervisorNamespace).Create(ctx, claim, metav1.CreateOptions{})
 				if err != nil {
@@ -433,6 +447,7 @@ func (c *controller) ControllerPublishVolume(ctx context.Context, req *csi.Contr
 func controllerPublishForBlockVolume(ctx context.Context, req *csi.ControllerPublishVolumeRequest, c *controller) (
 	*csi.ControllerPublishVolumeResponse, error) {
 	log := logger.GetLogger(ctx)
+	log.Info(req)
 	virtualMachine := &vmoperatortypes.VirtualMachine{}
 	vmKey := types.NamespacedName{
 		Namespace: c.supervisorNamespace,
