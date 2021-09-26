@@ -85,6 +85,8 @@ LDFLAGS_CNSCTL := $(LDFLAGS) -X "main.Version=$(VERSION)"
 # The CSI binary.
 CSI_BIN_NAME := vsphere-csi
 CSI_BIN := $(BIN_OUT)/$(CSI_BIN_NAME).$(GOOS)_$(GOARCH)
+CSI_BIN_LINUX := $(BIN_OUT)/$(CSI_BIN_NAME).linux_$(GOARCH)
+CSI_BIN_WINDOWS := $(BIN_OUT)/$(CSI_BIN_NAME).windows_$(GOARCH)
 build-csi: $(CSI_BIN)
 ifndef CSI_BIN_SRCS
 CSI_BIN_SRCS := cmd/$(CSI_BIN_NAME)/main.go go.mod go.sum
@@ -92,7 +94,9 @@ CSI_BIN_SRCS += $(addsuffix /*.go,$(shell go list -f '{{ join .Deps "\n" }}' ./c
 export CSI_BIN_SRCS
 endif
 $(CSI_BIN): $(CSI_BIN_SRCS)
-	CGO_ENABLED=0 GOOS=$(GOOS) GOARCH=$(GOARCH) go build -ldflags '$(LDFLAGS_CSI)' -o $(abspath $@) $<
+	CGO_ENABLED=0 GOOS=linux GOARCH=$(GOARCH) go build -ldflags '$(LDFLAGS_CSI)' -o $(CSI_BIN_LINUX) $<
+	@touch $@
+	CGO_ENABLED=0 GOOS=windows GOARCH=$(GOARCH) go build -ldflags '$(LDFLAGS_CSI)' -o $(CSI_BIN_WINDOWS) $<
 	@touch $@
 
 # The cnsctl binary.
