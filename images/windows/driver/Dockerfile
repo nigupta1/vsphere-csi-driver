@@ -11,4 +11,3 @@ LABEL description="CSI plugin"
 
 COPY .build/bin/vsphere-csi.windows_amd64 /csi.exe
 ENTRYPOINT ["/csi.exe"]
-

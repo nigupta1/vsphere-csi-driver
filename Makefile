@@ -203,9 +203,9 @@ deploy: | $(DOCKER_SOCK)
 .PHONY: clean
 clean:
 	@rm -f Dockerfile*
-	rm -f $(CSI_BIN) vsphere-csi-*.tar.gz vsphere-csi-*.zip \
+	rm -rf $(CSI_BIN) vsphere-csi-*.tar.gz vsphere-csi-*.zip \
 		$(SYNCER_BIN) vsphere-syncer-*.tar.gz vsphere-syncer-*.zip \
-		image-*.tar image-*.d $(DIST_OUT)/* $(BIN_OUT)/*
+		image-*.tar image-*.d $(DIST_OUT)/* $(BIN_OUT)/* .build/windows-driver
 	GO111MODULE=off go clean -i -x . ./cmd/$(CSI_BIN_NAME) ./cmd/$(SYNCER_BIN_NAME)
 
 .PHONY: clean-d

@@ -53,7 +53,8 @@ OSVERSION_WIN=(1809 1903 1909 2004 20H2 ltsc2022)
 
 # The output type could either be docker (local), or registry.
 # If it is registry, it will also allow us to push the Windows images.
-OUTPUT_TYPE=docker
+WINDOWS_IMAGE_OUTPUT="type=local,dest=.build/windows-driver"
+LINUX_IMAGE_OUTPUT="type=docker"
 
 REGISTRY=
 
@@ -113,34 +114,52 @@ function fatal() {
 
 
 function build_driver_images_windows() {
+  docker buildx use vsphere-csi-builder || docker buildx create --name vsphere-csi-builder --platform windows/amd64 --use
+  echo "building ${CSI_IMAGE_NAME}:${VERSION} for windows"
   # some registry do not allow uppercase tags
   osv=`lcase ${OSVERSION}`
   docker buildx build \
    --pull \
-   --platform "windows/$ARCH" \
-   --output=type=$OUTPUT_TYPE \
+   --platform "windows" \
+   --output ${WINDOWS_IMAGE_OUTPUT} \
    --file images/windows/driver/Dockerfile \
    --tag ${CSI_IMAGE_NAME}-windows-${osv}-${ARCH}:${VERSION} \
-   --build-arg ARCH=amd64 \
    --build-arg "VERSION=${VERSION}" \
-   --build-arg OSVERSION=${OSVERSION} \
+   --build-arg "OSVERSION=${OSVERSION}" \
    --build-arg "GOPROXY=${GOPROXY}" \
    --build-arg "GIT_COMMIT=${VERSION}" \
    .
 }
 
-function build_driver_images_linux() {
+function build_images_linux() {
+  echo "building ${CSI_IMAGE_NAME}:${VERSION} for linux"
   docker buildx build \
    --pull \
    --platform "linux/$ARCH" \
-   --output=type=$OUTPUT_TYPE \
+   --output ${LINUX_IMAGE_OUTPUT} \
    --file images/driver/Dockerfile \
-   --tag ${CSI_IMAGE_NAME}-linux-${ARCH}:${VERSION} \
+   --tag ${CSI_IMAGE_NAME}:${VERSION} \
    --build-arg ARCH=amd64 \
    --build-arg "VERSION=${VERSION}" \
    --build-arg "GOPROXY=${GOPROXY}" \
    --build-arg "GIT_COMMIT=${VERSION}" \
    .
+
+  echo "building ${SYNCER_IMAGE_NAME}:${VERSION} for linux"
+  docker build \
+      -f images/syncer/Dockerfile \
+      -t "${SYNCER_IMAGE_NAME}":"${VERSION}" \
+      --build-arg "VERSION=${VERSION}" \
+      --build-arg "GOPROXY=${GOPROXY}" \
+      --build-arg "GIT_COMMIT=${VERSION}" \
+  .
+
+  if [ "${LATEST}" ]; then
+    echo "tagging image ${CSI_IMAGE_NAME}:${VERSION} as latest"
+    docker tag "${CSI_IMAGE_NAME}":"${VERSION}" "${CSI_IMAGE_NAME}":latest
+    echo "tagging image ${SYNCER_IMAGE_NAME}:${VERSION} as latest"
+    docker tag "${SYNCER_IMAGE_NAME}":"${VERSION}" "${SYNCER_IMAGE_NAME}":latest
+  fi
 }
 
 function build_images() {
@@ -163,33 +182,11 @@ function build_images() {
       ;;
   esac
 
-  echo "building ${CSI_IMAGE_NAME}:${VERSION}"
-  echo "GOPROXY=${GOPROXY}"
-  docker build \
-    -f images/driver/Dockerfile \
-    -t "${CSI_IMAGE_NAME}":"${VERSION}" \
-    --build-arg "VERSION=${VERSION}" \
-    --build-arg "GOPROXY=${GOPROXY}" \
-    --build-arg "GIT_COMMIT=${VERSION}" \
-    .
-    
-  # build images to test windows code
-  build_driver_images_windows
-  echo "building ${SYNCER_IMAGE_NAME}:${VERSION}"
-  docker build \
-      -f images/syncer/Dockerfile \
-      -t "${SYNCER_IMAGE_NAME}":"${VERSION}" \
-      --build-arg "VERSION=${VERSION}" \
-      --build-arg "GOPROXY=${GOPROXY}" \
-      --build-arg "GIT_COMMIT=${VERSION}" \
-      .
-  if [ "${LATEST}" ]; then
-    echo "tagging image ${CSI_IMAGE_NAME}:${VERSION} as latest"
-    docker tag "${CSI_IMAGE_NAME}":"${VERSION}" "${CSI_IMAGE_NAME}":latest
-    echo "tagging image ${SYNCER_IMAGE_NAME}:${VERSION} as latest"
-    docker tag "${SYNCER_IMAGE_NAME}":"${VERSION}" "${SYNCER_IMAGE_NAME}":latest
+  # build images for linux platform
+  # build_images_linux
 
-  fi
+  # build images for windows platform
+  build_driver_images_windows
 }
 
 function push_manifest_driver() {
@@ -317,13 +314,14 @@ if [ "${PUSH}" ]; then
     CSI_IMAGE_NAME="${REGISTRY}driver"
   fi
   # build windows images and push them to registry as currently windows images are build only when push is enabled
-  OUTPUT_TYPE=registry
+  WINDOWS_IMAGE_OUTPUT="type=registry"
   for osversion in ${OSVERSION_WIN[@]} 
   do 
     OSVERSION=$osversion 
     build_driver_images_windows 
   done
   # build linux images and push them to registry
+  LINUX_IMAGE_OUTPUT="type=registry"
   build_driver_images_linux
   push_manifest_driver
   push_syncer_images
