@@ -17,6 +17,8 @@
 ################################################################################
 # This build arg allows the specification of a custom Golang image.
 ARG GOLANG_IMAGE=golang:1.16
+ARG OSVERSION
+ARG ARCH=amd64
 
 ################################################################################
 ##                              BUILD STAGE                                   ##
@@ -43,9 +45,9 @@ RUN GOOS=windows GOARCH=amd64 go build -a -ldflags="-w -s -extldflags=static -X 
 ################################################################################
 ##                              MAIN STAGE                                   ##
 ################################################################################
-FROM --platform=linux/amd64 gcr.io/k8s-staging-e2e-test-images/windows-servercore-cache:1.0-linux-amd64-1809 as core
+FROM --platform=linux/amd64 gcr.io/k8s-staging-e2e-test-images/windows-servercore-cache:1.0-linux-${ARCH}-${OSVERSION} as core
 
-FROM mcr.microsoft.com/windows/nanoserver:1809
+FROM mcr.microsoft.com/windows/nanoserver:${OSVERSION}
 COPY --from=core /Windows/System32/netapi32.dll /Windows/System32/netapi32.dll
 
 USER ContainerAdministrator
