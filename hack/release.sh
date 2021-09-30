@@ -183,7 +183,7 @@ function build_images() {
   esac
 
   # build images for linux platform
-  # build_images_linux
+  build_images_linux
 
   # build images for windows platform
   build_driver_images_windows
