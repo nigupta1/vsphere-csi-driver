@@ -94,7 +94,7 @@ FLAGS
 
 
 function lcase () {
-    tr [:upper:] [:lower:] <<< "${*}"
+    tr '[:upper:]' '[:lower:]' <<< "${*}"
 }
 
 
@@ -117,13 +117,13 @@ function build_driver_images_windows() {
   docker buildx use vsphere-csi-builder || docker buildx create --name vsphere-csi-builder --platform windows/amd64 --use
   echo "building ${CSI_IMAGE_NAME}:${VERSION} for windows"
   # some registry do not allow uppercase tags
-  osv=`lcase ${OSVERSION}`
+  osv=$(lcase ${OSVERSION})
   docker buildx build \
    --pull \
    --platform "windows" \
-   --output ${WINDOWS_IMAGE_OUTPUT} \
+   --output "${WINDOWS_IMAGE_OUTPUT}" \
    --file images/windows/driver/Dockerfile \
-   --tag ${CSI_IMAGE_NAME}-windows-${osv}-${ARCH}:${VERSION} \
+   --tag "${CSI_IMAGE_NAME}-windows-${osv}-${ARCH}:${VERSION}" \
    --build-arg "VERSION=${VERSION}" \
    --build-arg "OSVERSION=${OSVERSION}" \
    --build-arg "GOPROXY=${GOPROXY}" \
@@ -136,9 +136,9 @@ function build_images_linux() {
   docker buildx build \
    --pull \
    --platform "linux/$ARCH" \
-   --output ${LINUX_IMAGE_OUTPUT} \
+   --output "${LINUX_IMAGE_OUTPUT}" \
    --file images/driver/Dockerfile \
-   --tag ${CSI_IMAGE_NAME}:${VERSION} \
+   --tag "${CSI_IMAGE_NAME}:${VERSION}" \
    --build-arg ARCH=amd64 \
    --build-arg "VERSION=${VERSION}" \
    --build-arg "GOPROXY=${GOPROXY}" \
@@ -192,34 +192,51 @@ function build_images() {
 function push_manifest_driver() {
   IMAGE_TAG="${CSI_IMAGE_NAME}":"${VERSION}"
   IMAGE_TAG_LATEST="${CSI_IMAGE_NAME}":latest
-  windows_tags=""
-  for OSVERSION in ${OSVERSION_WIN[@]} 
+
+  # tag linux image with linux name and push them
+  linux_tags="${CSI_IMAGE_NAME}-linux:${VERSION}"
+  linux_orig_tag="${LINUX_CSI_IMAGE_NAME}:${VERSION}"
+  echo "tagging image ${linux_orig_tag} as ${linux_tags}"
+  docker tag "${linux_orig_tag}" "${linux_tags}"
+  echo "pushing ${linux_tags}"
+  docker push "${linux_tags}"
+
+  #windows_tags=""
+  for OSVERSION in "${OSVERSION_WIN[@]}"
   do 
-    osv=`lcase ${OSVERSION}`
-    windows_tags="${windows_tags} ${CSI_IMAGE_NAME}-windows-${osv}-${ARCH}:${VERSION}" 
+    osv=$(lcase "${OSVERSION}")
+    all_tags+=( "${CSI_IMAGE_NAME}-windows-${osv}-${ARCH}:${VERSION}" )
   done
-  linux_tags=${CSI_IMAGE_NAME}-linux-${ARCH}:${VERSION}
-  all_tags="${windows_tags} ${linux_tags}"
-  docker manifest create --amend ${IMAGE_TAG} ${all_tags}
+
+  echo "creating manifest ${IMAGE_TAG}"
+  all_tags+=( "${linux_tags}" )
+  docker manifest create --amend "${IMAGE_TAG}" "${all_tags[@]}"
   if [ "${LATEST}" ]; then 
-    docker manifest create --amend ${IMAGE_TAG_LATEST} ${all_tags}
+    echo "creating manifest ${IMAGE_TAG_LATEST}"
+    docker manifest create --amend "${IMAGE_TAG_LATEST}" "${all_tags[@]}"
   fi
   # add "os.version" field to windows images (based on https://github.com/kubernetes/kubernetes/blob/master/build/pause/Makefile)
-  for OSVERSION in ${OSVERSION_WIN[@]}
+  echo "adding os.version to manifest"
+  for OSVERSION in "${OSVERSION_WIN[@]}"
   do 
-    osv=`lcase ${OSVERSION}`
+    osv=$(lcase "${OSVERSION}")
     BASEIMAGE=mcr.microsoft.com/windows/nanoserver:${OSVERSION}; 
-    full_version=`docker manifest inspect ${BASEIMAGE} | jq -r '.manifests[0].platform["os.version"]'`; 
-    docker manifest annotate --os windows --arch $ARCH --os-version ${full_version} ${IMAGE_TAG} ${CSI_IMAGE_NAME}-windows-${osv}-${ARCH}:${VERSION}; 
+    full_version=$(docker manifest inspect "${BASEIMAGE}" | jq -r '.manifests[0].platform["os.version"]'); 
+    echo "fullversion for ${BASEIMAGE} : ${full_version}"
+    echo "annotating ${IMAGE_TAG} for {OSVERSION}"
+    docker manifest annotate --os windows --arch "$ARCH" --os-version "${full_version}" "${IMAGE_TAG}" "${CSI_IMAGE_NAME}-windows-${osv}-${ARCH}:${VERSION}"; 
     if [ "${LATEST}" ]; then 
-      docker manifest annotate --os windows --arch $ARCH --os-version ${full_version} ${IMAGE_TAG_LATEST} ${CSI_IMAGE_NAME}-windows-${osv}-${ARCH}:${VERSION}; 
+      echo "annotating ${IMAGE_TAG_LATEST} for {OSVERSION}"
+      docker manifest annotate --os windows --arch "$ARCH" --os-version "${full_version}" "${IMAGE_TAG_LATEST}" "${CSI_IMAGE_NAME}-windows-${osv}-${ARCH}:${VERSION}"; 
     fi 
   done
-  docker manifest push ${IMAGE_TAG}
-  docker manifest inspect ${IMAGE_TAG}
+  echo "pushing manifest ${IMAGE_TAG}"
+  docker manifest push "${IMAGE_TAG}"
+  docker manifest inspect "${IMAGE_TAG}"
   if [ "${LATEST}" ]; then
-    docker manifest push ${IMAGE_TAG_LATEST}
-    docker manifest inspect ${IMAGE_TAG_LATEST}
+    echo "pushing manifest ${IMAGE_TAG_LATEST}"
+    docker manifest push "${IMAGE_TAG_LATEST}"
+    docker manifest inspect "${IMAGE_TAG_LATEST}"
   fi
 }
 
@@ -241,7 +258,7 @@ function push_syncer_images() {
     TAG="${REGISTRY}"syncer:"${VERSION}"
     TAG_LATEST="${REGISTRY}"syncer:latest
     docker tag "${SYNCER_IMAGE_NAME}":"${VERSION}" "${TAG}"
-    docker push ${TAG}
+    docker push "${TAG}"
     if [ "${LATEST}" ]; then
       docker tag "${SYNCER_IMAGE_NAME}":"${VERSION}" "${TAG_LATEST}"
       echo "also pushing ${TAG_LATEST} as latest"
@@ -310,19 +327,21 @@ build_images
 
 # Optionally push artifacts
 if [ "${PUSH}" ]; then
+  # by default linux images dont have linux in their name
+  # LINUX_CSI_IMAGE_NAME is used to identify original tag after build_images
+  LINUX_CSI_IMAGE_NAME=$CSI_IMAGE_NAME
   if [ "${REGISTRY}" ]; then
     CSI_IMAGE_NAME="${REGISTRY}driver"
   fi
   # build windows images and push them to registry as currently windows images are build only when push is enabled
   WINDOWS_IMAGE_OUTPUT="type=registry"
-  for osversion in ${OSVERSION_WIN[@]} 
+  for osversion in "${OSVERSION_WIN[@]}"
   do 
-    OSVERSION=$osversion 
+    OSVERSION="$osversion"
     build_driver_images_windows 
   done
-  # build linux images and push them to registry
+  # tag linux images with linux and push them to registry
   LINUX_IMAGE_OUTPUT="type=registry"
-  build_driver_images_linux
   push_manifest_driver
   push_syncer_images
 fi

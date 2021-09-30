@@ -87,15 +87,18 @@ CSI_BIN_NAME := vsphere-csi
 CSI_BIN := $(BIN_OUT)/$(CSI_BIN_NAME).$(GOOS)_$(GOARCH)
 CSI_BIN_LINUX := $(BIN_OUT)/$(CSI_BIN_NAME).linux_$(GOARCH)
 CSI_BIN_WINDOWS := $(BIN_OUT)/$(CSI_BIN_NAME).windows_$(GOARCH)
-build-csi: $(CSI_BIN)
+build-csi: $(CSI_BIN) 
+build-csi-windows: $(CSI_BIN_WINDOWS)
 ifndef CSI_BIN_SRCS
 CSI_BIN_SRCS := cmd/$(CSI_BIN_NAME)/main.go go.mod go.sum
 CSI_BIN_SRCS += $(addsuffix /*.go,$(shell go list -f '{{ join .Deps "\n" }}' ./cmd/$(CSI_BIN_NAME) | grep $(MOD_NAME) | sed 's~$(MOD_NAME)~.~'))
 export CSI_BIN_SRCS
 endif
 $(CSI_BIN): $(CSI_BIN_SRCS)
-	CGO_ENABLED=0 GOOS=linux GOARCH=$(GOARCH) go build -ldflags '$(LDFLAGS_CSI)' -o $(CSI_BIN_LINUX) $<
+	CGO_ENABLED=0 GOOS=$(GOOS) GOARCH=$(GOARCH) go build -ldflags '$(LDFLAGS_CSI)' -o $(CSI_BIN_LINUX) $<
 	@touch $@
+
+$(CSI_BIN_WINDOWS): $(CSI_BIN_SRCS)
 	CGO_ENABLED=0 GOOS=windows GOARCH=$(GOARCH) go build -ldflags '$(LDFLAGS_CSI)' -o $(CSI_BIN_WINDOWS) $<
 	@touch $@
 
@@ -146,7 +149,7 @@ $(SYNCER_BIN): $(SYNCER_BIN_SRCS) syncer_manifest
 	@touch $@
 
 # The default build target.
-build build-bins: $(CSI_BIN) $(SYNCER_BIN) $(CNSCTL_BIN)
+build build-bins: $(CSI_BIN) $(CSI_BIN_WINDOWS) $(SYNCER_BIN) $(CNSCTL_BIN)
 build-with-docker:
 	hack/make.sh
 
@@ -399,7 +402,11 @@ images: | $(DOCKER_SOCK)
 ################################################################################
 .PHONY: push-images upload-images
 push-images: | $(DOCKER_SOCK)
+ifndef CSI_REGISTRY
 	hack/release.sh -p
+else 
+	hack/release.sh -p -r ${CSI_REGISTRY}
+endif
 
 ################################################################################
 ##                                  CI IMAGE                                  ##
