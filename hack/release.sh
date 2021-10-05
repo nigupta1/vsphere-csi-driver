@@ -203,10 +203,10 @@ function push_manifest_driver() {
     all_tags+=( "${CSI_IMAGE_NAME}-windows-${osv}-${ARCH}:${VERSION}" )
   done
   all_tags+=( "${linux_tags}" )
-  docker manifest create "${IMAGE_TAG}" "${all_tags[@]}"
+  docker manifest create --amend "${IMAGE_TAG}" "${all_tags[@]}"
   if [ "${LATEST}" ]; then 
     echo "creating manifest ${IMAGE_TAG_LATEST}"
-    docker manifest create  "${IMAGE_TAG_LATEST}" "${all_tags[@]}"
+    docker manifest create --amend "${IMAGE_TAG_LATEST}" "${all_tags[@]}"
   fi
   # add "os.version" field to windows images (based on https://github.com/kubernetes/kubernetes/blob/master/build/pause/Makefile)
   echo "adding os.version to manifest"
