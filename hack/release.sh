@@ -114,13 +114,12 @@ function fatal() {
 
 
 function build_driver_images_windows() {
-  docker buildx use vsphere-csi-builder || docker buildx create --name vsphere-csi-builder --platform windows/amd64 --use
+  docker buildx use vsphere-csi-builder-win || docker buildx create --name vsphere-csi-builder-win --platform windows/amd64 --use
   echo "building ${CSI_IMAGE_NAME}:${VERSION} for windows"
   # some registry do not allow uppercase tags
   osv=$(lcase ${OSVERSION})
   tag="${CSI_IMAGE_NAME}-windows-${osv}-${ARCH}:${VERSION}"
   docker buildx build \
-   --pull \
    --platform "windows" \
    --output "${WINDOWS_IMAGE_OUTPUT}" \
    --file images/windows/driver/Dockerfile \
@@ -130,13 +129,13 @@ function build_driver_images_windows() {
    --build-arg "GOPROXY=${GOPROXY}" \
    --build-arg "GIT_COMMIT=${VERSION}" \
    .
+   docker buildx rm vsphere-csi-builder-win
 }
 
 function build_driver_images_linux() {
   echo "building ${CSI_IMAGE_NAME}:${VERSION} for linux"
   tag="${CSI_IMAGE_NAME}-linux-${ARCH}:${VERSION}"
   docker buildx build \
-   --pull \
    --platform "linux/$ARCH" \
    --output "${LINUX_IMAGE_OUTPUT}" \
    --file images/driver/Dockerfile \
