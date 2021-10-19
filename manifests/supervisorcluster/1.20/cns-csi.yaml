@@ -170,7 +170,7 @@ spec:
             - "--kube-api-qps=100"
             - "--kube-api-burst=100"
             - "--default-fstype=ext4"
-            - "--use-service-for-placement-engine=false"
+            - "--use-service-for-placement-engine=true"
           env:
             - name: ADDRESS
               value: /csi/csi.sock
